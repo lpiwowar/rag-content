@@ -14,12 +14,13 @@
 #    under the License.
 
 import argparse
+
 import unittest
 
-from lightspeed_rag_content import utils
+from lightspeed_rag_content.asciidoc import utils
 
 
-class TestMetadataProcessor(unittest.TestCase):
+class TestAsciidocConverter(unittest.TestCase):
 
     def test_get_common_arg_parser(self):
         parser = utils.get_common_arg_parser()
