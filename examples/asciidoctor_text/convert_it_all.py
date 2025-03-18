@@ -4,7 +4,7 @@
 
 import argparse
 import logging
-import os
+from pathlib import Path
 
 import yaml
 
@@ -17,24 +17,28 @@ def node_in_distro(node: dict, distro: str) -> bool:
     """Check if a node is in a distro."""
     return node.get("Distros", "") == "" or distro in node.get("Distros", "").split(",")
 
-def process_node(node: dict, distro: str, dir: str = "", file_list: list = []) -> list:
+def process_node(node: dict, distro: str, dir: Path = Path(),
+                 file_list: list[Path] = []) -> list:
     """Process YAML node from the topic map."""
     currentdir = dir
 
-    if node_in_distro(node, distro) and "Topics" in node:
-        currentdir = os.path.join(currentdir, node["Dir"])
+    if not node_in_distro(node, distro):
+        return file_list
+
+    if "Topics" in node:
+        currentdir = currentdir.joinpath(node["Dir"])
         for subnode in node["Topics"]:
             file_list = process_node(
                 subnode, distro, dir=currentdir, file_list=file_list
             )
-    elif node_in_distro(node, distro):
-        file_list.append(os.path.join(currentdir, node["File"]))
+    else:
+        file_list.append(currentdir.joinpath(node["File"]))
 
     return file_list
 
-def get_file_list() -> list:
+def get_file_list(topic_map: Path) -> list:
     """Get list of ALL documentation files that should be processed."""
-    topic_map = os.path.normpath(os.path.join(os.getcwd(), args.topic_map))
+    topic_map = Path().joinpath(args.topic_map).absolute()
     with open(topic_map, "r") as fin:
         topic_map = yaml.safe_load_all(fin)
         mega_file_list: list = []
@@ -48,15 +52,14 @@ def get_file_list() -> list:
 def get_arg_parser() -> argparse.ArgumentParser:
     """Get argument parser for the OpenShift asciidoc command."""
     parser = argparse.ArgumentParser(
-        description="This command converts asciidoc documentation to txt format.",
-        usage="TODO [options]",
+        description="This command converts asciidoc documentation to txt format."
     )
 
     parser.add_argument(
         "-i",
         "--input-dir",
         required=True,
-        type=str,
+        type=Path,
         help="The input directory containing asciidoc formated documentation",
     )
 
@@ -64,7 +67,7 @@ def get_arg_parser() -> argparse.ArgumentParser:
         "-o",
         "--output-dir",
         required=True,
-        type=str,
+        type=Path,
         help="The output directory for text",
     )
 
@@ -88,8 +91,16 @@ def get_arg_parser() -> argparse.ArgumentParser:
         "-t",
         "--topic-map",
         required=True,
-        type=str,
+        type=Path,
         help="The topic map file",
+    )
+
+    parser.add_argument(
+        "-c",
+        "--converter-file",
+        required=False,
+        type=Path,
+        help="Ruby code that should be used to convert the file."
     )
 
     return parser
@@ -98,17 +109,18 @@ def get_arg_parser() -> argparse.ArgumentParser:
 if __name__ == "__main__":
     parser = get_arg_parser()
     args = parser.parse_args()
+    file_list = get_file_list(args.topic_map)
 
-    input_dir = os.path.normpath(args.input_dir)
-    output_dir = os.path.normpath(args.output_dir)
-    file_list = get_file_list()
-    os.makedirs(output_dir, exist_ok=True)
+    input_dir = args.input_dir.absolute()
+    output_dir = args.output_dir.absolute()
 
-    converter = AsciidocConverter(attributes_file=args.attributes)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    adoc_text_converter = AsciidocConverter(target_format="text", attributes_file=args.attributes)
 
     for filename in file_list:
-        input_file = os.path.join(input_dir, filename + ".adoc")
-        output_file = os.path.join(output_dir, filename + ".txt")
+        input_file = input_dir.joinpath(filename.with_suffix(".adoc"))
+        output_file = output_dir.joinpath(filename.with_suffix(".txt"))
 
-        os.makedirs(os.path.dirname(os.path.realpath(output_file)), exist_ok=True)
-        converter.asciidoc_to_txt_file(input_file, output_file)
+        output_file.absolute().parent.mkdir(parents=True, exist_ok=True)
+        adoc_text_converter.convert(input_file, output_file)
