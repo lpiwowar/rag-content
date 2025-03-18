@@ -14,63 +14,55 @@
 #    under the License.
 
 import logging
-import os
+import shutil
 import subprocess
 from importlib import resources
+from pathlib import Path
 
 import yaml
 
 LOG = logging.getLogger(__name__)
-# TODO resolve logging. Do I want to use INFO level?
-logging.basicConfig(level=logging.INFO)
 
 
 class AsciidocConverter:
-    """Converts asciidoc formated documents to different formats.
+    """Convert asciidoc formated documents to different formats.
 
     The class requires ruby to be installed on the local machine as well as the
-    asciidoc tool. If the tools are not present Exception is raised.
+    asciidoctor tool. If the tools are not present Exception is raised.
+
+    Raises:
+        FileNotFoundError: When asciidoctor executable can not be found.
     """
 
-    CONVERTER_FILE: str = "asciidoc_text_converter.rb"
+    LIBRARY_FILE: Path = resources.files(__package__).joinpath("ruby_asciidoc/asciidoc_text_converter.rb")
 
-    def __init__(self, attributes_file: str = "", converter_file: str = CONVERTER_FILE,
-                 backend: str = "text"):
+    def __init__(self, target_format: str = "text", attributes_file: Path | None = None,
+                 library_file: Path = LIBRARY_FILE):
         """AsciidocConverter constructor.
 
         Args:
-            attributes_file: str: Absolute path pointing to the attributes file.
-            converter_file: str: File containing the logic to convert the file.
-            backend: str: What is the target format.
+            attributes_file: Absolute path pointing to the attributes file.
+            library_file: File containing the logic to convert the file.
+            target_format: What is the target format.
         """
-        self._check_asciidoctor_available()
+        self.asciidoctor_cmd = self._get_asciidoctor_path()
 
         self.attribute_list = self._get_attribute_list(attributes_file)
-        self.converter_file = str(resources.files(__package__).joinpath(converter_file))
-        self.backend = backend
+        self.library_file = library_file
+        self.target_format = target_format
 
     @staticmethod
-    def _check_asciidoctor_available():
-        """Check whether asciidoctor and ruby is installed"""
-        # TODO use subprocess.run safely
-        # TODO use shutils.which
-        result = subprocess.run(["/usr/bin/asciidoctor", "--version"],
-                                check=True, capture_output=True)
-        if result.returncode != 0:
-            # TODO raise appropriate exception
-            raise Exception("asciidoctor command not found")
-        else:
-            LOG.debug(f"Using asciidoctor version: {result.stdout}")
+    def _get_asciidoctor_path() -> str:
+        """Check whether asciidoctor and ruby is installed."""
+        asciidoctor_path = shutil.which("asciidoctor")
+        if not asciidoctor_path:
+            raise FileNotFoundError("asciidoctor executable not found")
 
-        # TODO use subprocess.run safely
-        result = subprocess.run(["/usr/bin/ruby", "--version"], check=True, capture_output=True)
-        if result.returncode != 0:
-            raise Exception("asciidoctor command not found")
-        else:
-            LOG.debug(f"Using ruby version: {result.stdout}")
+        LOG.info(f"Using asciidoctor with {asciidoctor_path} path")
+        return asciidoctor_path
 
     @staticmethod
-    def _get_attribute_list(attributes_file: str) -> list:
+    def _get_attribute_list(attributes_file: Path) -> list:
         """Convert file containing attributes to list of <key>=<value> pairs."""
         attribute_list: list = []
 
@@ -80,50 +72,43 @@ class AsciidocConverter:
         with open(attributes_file, "r") as file:
             attributes = yaml.safe_load(file)
 
+            if attributes is None:
+                return attribute_list
+
             for key, value in attributes.items():
-                attribute_list = [*attribute_list, "-a", key + "=%s" % value]
+                attribute_list += ["-a", key + "=%s" % value]
 
         return attribute_list
 
 
-    def asciidoc_to_txt_file(self, asciidoc_filepath: str, txt_filepath: str) -> None:
-        """Convert .adoc file to .txt.
+    def convert(self, source_file: Path, destination_file: Path) -> None:
+        """Convert asciidoc file to target format.
 
         Args:
-            asciidoc_filepath: str: Absolute path pointing to the asciidoc file
-            txt_filepath: str: Path where the converted file should be stored
+            source_file: Filepath of a file that should be converted.
+            destination_file: Filepath of a destination where the converted file should be stored.
 
         Raises:
-            Exception: When the source asciidoc file does not exist.
+            subprocess.CalledSubprocessError: If an error occurss when running asciidoctor.
         """
-        LOG.info("Processing: " + asciidoc_filepath)
+        LOG.info("Processing: " + str(source_file.absolute()))
+        if destination_file.exists():
+            LOG.warning(f"Destination file {destination_file} exists. It will be overwritten.")
 
-        if not os.path.isfile(asciidoc_filepath):
-            raise Exception("The asciidoc file does not exist.")
-
-        if os.path.isFile(txt_filepath):
-            LOG.warning(f"Destination file {txt_filepath} exists. Overwriting.")
-
-        command = ["asciidoctor"]
+        command = [self.asciidoctor_cmd]
         command = command + self.attribute_list
         command = [
             *command,
             "-r",
-            self.converter_file,
+            str(self.library_file.absolute()),
             "-b",
-            self.backend,
+            self.target_format,
             "-o",
-            txt_filepath,
+            str(destination_file.absolute()),
             "--trace",
             "--quiet",
-            asciidoc_filepath,
+            str(source_file.absolute()),
         ]
 
-        # TODO use subprocess.run safely
-        result = subprocess.run(command, check=True, capture_output=True)
-        if result.returncode != 0:
-            LOG.error(result.stderr)
-            LOG.error(result.stdout)
-
-        return
+        subprocess.run(command, check=True, capture_output=True)  # noqa: S603
 

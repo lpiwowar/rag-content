@@ -12,47 +12,34 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+
 import logging
+import shutil
 import subprocess
 import sys
+from importlib import resources
 from pathlib import Path
-
-from lightspeed_rag_content.asciidoc.asciidoc_converter import AsciidocConverter
-from lightspeed_rag_content.asciidoc.utils import get_common_arg_parser
 
 LOG = logging.getLogger(__package__)
 logging.basicConfig(level=logging.INFO)
 
-def main(argv):
-    parser = get_common_arg_parser()
-    parser.prog = "lightspeed_rag_content.asciidoc"
+def main(argv: list):
+    package_dir: Path = resources.files(__package__)
+    dumper_script_path: Path = package_dir / "ruby_asciidoc" / "asciidoc_structure_dumper.rb"
 
-    parser.add_argument(
-        "--input-file",
-        "-i",
-        required=True,
-        type=Path,
-        help="A file in asciidoc format that should be converted to text."
-    )
-
-    parser.add_argument(
-        "--output-file",
-        "-o",
-        required=True,
-        type=Path,
-        help="File where the file in the text format should be stored."
-    )
-
-    args = parser.parse_args(argv)
+    ruby_cmd = shutil.which("ruby")
+    if not ruby_cmd:
+        LOG.error("Missing ruby executable")
+        sys.exit(1)
 
     try:
-        converter = AsciidocConverter(target_format="text", attributes_file=args.attributes_file)
-        converter.convert(args.input_file, args.output_file)
+        subprocess.run([  # noqa: S603
+            ruby_cmd,
+            str(dumper_script_path.absolute()),
+            argv[1]
+        ], check=True, shell=False)
     except subprocess.CalledProcessError as e:
         LOG.error(e.stderr)
-        sys.exit(e.returncode)
-    except FileNotFoundError as e:
-        LOG.error(str(e))
         sys.exit(1)
 
 if __name__ == "__main__":

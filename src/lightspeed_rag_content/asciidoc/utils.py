@@ -13,32 +13,17 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 import argparse
+from pathlib import Path
 
 
 def get_common_arg_parser() -> argparse.ArgumentParser:
     """Get default argument parser for asciidoc related operations."""
     parser = argparse.ArgumentParser(
-        description="Command that can be used to convert asciidoc format to txt format.")
-
-    parser.add_argument(
-        "-i"
-        "--input-file",
-        required=True,
-        type=str,
-        help="A file in asciidoc format that should be converted to text."
-    )
-
-    parser.add_argument(
-        "-o",
-        "--output-file",
-        required=True,
-        type=str,
-        help="File where the file in the text format should be stored."
-    )
+        description="Command that can be used to convert asciidoc formated file..")
 
     parser.add_argument(
         "-a",
-        "--atributes-file",
+        "--attributes-file",
         required=False,
         type=str,
         help="File containing attributes that should be passed to asciidoctor."
@@ -48,7 +33,7 @@ def get_common_arg_parser() -> argparse.ArgumentParser:
         "-c",
         "--converter-file",
         required=False,
-        type=str,
+        type=Path,
         help="Ruby code that should be used to convert the file."
     )
 
