@@ -148,7 +148,9 @@ class AsciidocConverter:
 
         Args:
             source_file: A path of a file that should be converted.
-            destination_file: A path of where the converted file should be stored.
+            destination_file:
+                A path of where the converted file should be stored. If folders
+                in the path do not exist, they will be created.
 
         Raises:
             subprocess.CalledSubprocessError:
@@ -158,7 +160,7 @@ class AsciidocConverter:
         if destination_file.exists():
             LOG.warning(f"Destination file {destination_file} exists. It will be overwritten!")
         else:
-            destination_file.mkdir(parents = True, exist_ok=True)
+            destination_file.parent.mkdir(parents = True, exist_ok=True)
 
         command = [self.asciidoctor_cmd]
 
