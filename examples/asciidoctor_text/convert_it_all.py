@@ -118,16 +118,17 @@ def main():
     output_dir = args.output_dir.absolute()
 
     adoc_text_converter = AsciidocConverter(attributes_file=args.attributes)
-    for filename in file_list:
-        input_file = input_dir.joinpath(filename.with_suffix(".adoc"))
-        output_file = output_dir.joinpath(filename.with_suffix(".txt"))
 
-        output_file.absolute().parent.mkdir(parents=True, exist_ok=True)
+    for filename in file_list:
+        input_file = input_dir
+        input_file = input_dir.joinpath(filename.with_name(filename.name + ".adoc"))
+        output_file = output_dir.joinpath(filename.with_name(filename.name + ".txt"))
 
         try:
             adoc_text_converter.convert(input_file, output_file)
         except subprocess.CalledProcessError as e:
             LOG.warning(e.stderr)
+            LOG.warning(e.stdout)
             continue
 
 if __name__ == "__main__":
