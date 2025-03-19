@@ -4,11 +4,13 @@
 
 import argparse
 import logging
+import subprocess
+import sys
 from pathlib import Path
 
 import yaml
 
-from lightspeed_rag_content.asciidoc.asciidoc_converter import AsciidocConverter
+from lightspeed_rag_content.asciidoc import AsciidocConverter
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -36,15 +38,16 @@ def process_node(node: dict, distro: str, dir: Path = Path(),
 
     return file_list
 
-def get_file_list(topic_map: Path) -> list:
+def get_file_list(topic_map: Path, distro: str) -> list:
     """Get list of ALL documentation files that should be processed."""
-    topic_map = Path().joinpath(args.topic_map).absolute()
+    topic_map = Path().joinpath(topic_map).absolute()
     with open(topic_map, "r") as fin:
         topic_map = yaml.safe_load_all(fin)
         mega_file_list: list = []
+
         for map in topic_map:
             file_list: list = []
-            file_list = process_node(map, args.distro, file_list=file_list)
+            file_list = process_node(map, distro, file_list=file_list)
             mega_file_list = mega_file_list + file_list
 
     return mega_file_list
@@ -105,22 +108,31 @@ def get_arg_parser() -> argparse.ArgumentParser:
 
     return parser
 
-
-if __name__ == "__main__":
+def main():
     parser = get_arg_parser()
     args = parser.parse_args()
-    file_list = get_file_list(args.topic_map)
+
+    file_list = get_file_list(args.topic_map, args.distro)
 
     input_dir = args.input_dir.absolute()
     output_dir = args.output_dir.absolute()
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    adoc_text_converter = AsciidocConverter(target_format="text", attributes_file=args.attributes)
-
+    adoc_text_converter = AsciidocConverter(attributes_file=args.attributes)
     for filename in file_list:
         input_file = input_dir.joinpath(filename.with_suffix(".adoc"))
         output_file = output_dir.joinpath(filename.with_suffix(".txt"))
 
         output_file.absolute().parent.mkdir(parents=True, exist_ok=True)
-        adoc_text_converter.convert(input_file, output_file)
+
+        try:
+            adoc_text_converter.convert(input_file, output_file)
+        except subprocess.CalledProcessError as e:
+            LOG.warning(e.stderr)
+            continue
+
+if __name__ == "__main__":
+    try:
+        main()
+    except FileNotFoundError as e:
+        LOG.error(e)
+        sys.exit(1)
